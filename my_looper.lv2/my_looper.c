@@ -46,7 +46,7 @@ typedef struct {
     float        hpf_y1_r;
 } HybridLooper;
 
-// Array para convertir los pasos de Mixxx (0 a 8) a valores de golpe reales
+// Array para convertir los pasos calculados internamente (0 a 8) a valores de golpe reales
 static const float BEAT_VALUES[9] = {
     0.03125f, // 0: 1/32
     0.0625f,  // 1: 1/16
@@ -65,8 +65,8 @@ instantiate(const LV2_Descriptor* descriptor, double rate, const char* bundle_pa
     self->sample_rate = rate;
     self->state = STATE_IDLE;
 
-    // Reservar memoria para 8 segundos a 60 BPM máximo (8 segundos totales)
-    self->buffer_capacity = (uint32_t)(rate * 8.0); 
+    // Reservar memoria para 15 segundos máximo para dar soporte a tempos lentos
+    self->buffer_capacity = (uint32_t)(rate * 15.0); 
     self->buffer_l = (float*)calloc(self->buffer_capacity, sizeof(float));
     self->buffer_r = (float*)calloc(self->buffer_capacity, sizeof(float));
 
@@ -90,7 +90,6 @@ connect_port(LV2_Handle instance, uint32_t port, void* data) {
     }
 }
 
-// Se ejecuta cada vez que el efecto se enciende o se apaga en Mixxx
 static void
 activate(LV2_Handle instance) {
     HybridLooper* self = (HybridLooper*)instance;
@@ -99,13 +98,11 @@ activate(LV2_Handle instance) {
     self->read_ptr = 0;
     self->total_recorded = 0;
     
-    // Limpiar búferes al reiniciar
     for (uint32_t i = 0; i < self->buffer_capacity; ++i) {
         self->buffer_l[i] = 0.0f;
         self->buffer_r[i] = 0.0f;
     }
 
-    // Limpiar variables del filtro
     self->hpf_x1_l = 0.0f; self->hpf_y1_l = 0.0f;
     self->hpf_x1_r = 0.0f; self->hpf_y1_r = 0.0f;
 }
@@ -119,14 +116,15 @@ run(LV2_Handle instance, uint32_t sample_count) {
     float fb  = *(self->feedback);
     float hpf = *(self->hpf_enable);
     
-    // Sincronización real con el BPM recibido de Mixxx
+    // Obtener BPM del knob de Mixxx
     float bpm = *(self->bpm);
-    if (bpm < 20.0f || bpm > 300.0f) {
-        bpm = 120.0f; // Respaldo por seguridad
+    if (bpm < 40.0f || bpm > 250.0f) {
+        bpm = 120.0f; 
     }
 
-    // Obtener la fracción de golpe según el paso seleccionado
-    int step_idx = (int)(*(self->time_step));
+    // Dividir el valor del knob (0.0 a 1.0) en 9 pasos indexados (0 a 8) de manera interna
+    float knob_val = *(self->time_step);
+    int step_idx = (int)(knob_val * 8.0f + 0.5f); // Redondeo al entero más cercano
     if (step_idx < 0) step_idx = 0;
     if (step_idx > 8) step_idx = 8;
     float beat_setting = BEAT_VALUES[step_idx];
@@ -136,12 +134,9 @@ run(LV2_Handle instance, uint32_t sample_count) {
     self->target_samples = (uint32_t)(samples_per_beat * beat_setting);
     self->max_8_beat_samples = (uint32_t)(samples_per_beat * MAX_BEATS);
 
-    // Límites de seguridad para evitar desbordamiento de memoria
     if (self->target_samples > self->buffer_capacity) self->target_samples = self->buffer_capacity;
     if (self->max_8_beat_samples > self->buffer_capacity) self->max_8_beat_samples = self->buffer_capacity;
 
-    // Calcular coeficientes del filtro HPF de 80Hz
-    // fc = 80Hz. Coeficiente alfa = 1 / (1 + (2*pi*fc/fs))
     float dt = 1.0f / (float)self->sample_rate;
     float rc = 1.0f / (2.0f * 3.14159265f * 80.0f);
     float alpha = rc / (rc + dt);
@@ -150,7 +145,6 @@ run(LV2_Handle instance, uint32_t sample_count) {
         float in_left = self->in_l[i];
         float in_right = self->in_r[i];
 
-        // Cambios de estado basados en el Activator del plugin
         if (self->state == STATE_IDLE && act >= 0.5f) {
             self->state = STATE_RECORDING;
             self->write_ptr = 0;
@@ -178,21 +172,18 @@ run(LV2_Handle instance, uint32_t sample_count) {
             }
 
         } else if (self->state == STATE_LOOPING) {
-            // 1. Reproducir audio del bucle
             float loop_l = self->buffer_l[self->read_ptr];
             float loop_r = self->buffer_r[self->read_ptr];
 
             self->read_ptr++;
             if (self->read_ptr >= self->target_samples) {
                 self->read_ptr = 0;
-                // Aplicar atenuación por feedback al búfer para la siguiente repetición
                 for (uint32_t k = 0; k < self->target_samples; ++k) {
                     self->buffer_l[k] *= fb;
                     self->buffer_r[k] *= fb;
                 }
             }
 
-            // 2. Grabación en segundo plano oculta hasta los 8 tiempos máximos
             if (self->total_recorded < self->max_8_beat_samples) {
                 self->buffer_l[self->write_ptr] = in_left;
                 self->buffer_r[self->write_ptr] = in_right;
@@ -200,31 +191,25 @@ run(LV2_Handle instance, uint32_t sample_count) {
                 self->total_recorded++;
             }
 
-            // 3. Filtro Paso Alto (HPF) de 80Hz si está activo
             if (hpf >= 0.5f) {
-                // Canal Izquierdo
                 float filtered_l = alpha * (self->hpf_y1_l + loop_l - self->hpf_x1_l);
                 self->hpf_x1_l = loop_l;
                 self->hpf_y1_l = filtered_l;
                 loop_l = filtered_l;
 
-                // Canal Derecho
                 float filtered_r = alpha * (self->hpf_y1_r + loop_r - self->hpf_x1_r);
                 self->hpf_x1_r = loop_r;
                 self->hpf_y1_r = filtered_r;
                 loop_r = filtered_r;
             }
 
-            // 4. Curva de mezcla Wet/Dry solicitada (Estilo DJ)
             float wet_gain = 1.0f;
             float dry_gain = 1.0f;
 
             if (mix < 0.5f) {
-                // De 0.0 a 0.5: Dry al 100%, Wet escala de 0.0 a 1.0
                 wet_gain = mix * 2.0f;
                 dry_gain = 1.0f;
             } else {
-                // De 0.5 a 1.0: Wet al 100%, Dry escala de 1.0 a 0.0
                 wet_gain = 1.0f;
                 dry_gain = (1.0f - mix) * 2.0f;
             }

@@ -13,7 +13,9 @@ FetchContent_MakeAvailable(lv2)
 
 # Define the shared library target
 add_library(my_looper SHARED "my_looper.lv2/my_looper.c")
-target_link_libraries(my_looper PRIVATE lv2::lv2)
+
+# Tell CMake to find the headers inside the downloaded LV2 folder
+target_include_directories(my_looper PRIVATE ${lv2_SOURCE_DIR})
 
 # Set output name properties
 set_target_properties(my_looper PROPERTIES

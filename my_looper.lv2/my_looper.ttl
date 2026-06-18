@@ -9,16 +9,15 @@
     doap:name "Hybrid DJ Looper" ;
     doap:license <http://opensource.org/licenses/isc> ;
     lv2:port [
-        # --- KNOB 1: TIME (9 Pasos fijos) ---
+        # --- KNOB 1: TIME (Rango estándar 0.0 a 1.0 para Mixxx) ---
         a lv2:InputPort ,
             lv2:ControlPort ;
         lv2:index 0 ;
         lv2:symbol "time_step" ;
         lv2:name "Time" ;
-        lv2:default 6.0 ; # Corresponde a 4 beats por defecto
+        lv2:default 0.75 ; # Equivalente aproximado a 4 beats
         lv2:minimum 0.0 ;
-        lv2:maximum 8.0 ;
-        lv2:portProperty lv2:integer ; # Fuerza a Mixxx a usar pasos enteros
+        lv2:maximum 1.0 ;
     ] , [
         # --- KNOB 2: FEEDBACK ---
         a lv2:InputPort ,
@@ -59,18 +58,18 @@
         lv2:default 0.0 ;
         lv2:minimum 0.0 ;
         lv2:maximum 1.0 ;
-        lv2:portProperty lv2:toggled ; # Mixxx lo dibujará como un botón
+        lv2:portProperty lv2:toggled ;
     ] , [
-        # --- PUERTO INVISIBLE DE BPM (Sincronización automática con Mixxx) ---
+        # --- KNOB 6: BPM (Sincronizado o Manual si falla la sincronización) ---
         a lv2:InputPort ,
             lv2:ControlPort ;
         lv2:index 5 ;
         lv2:symbol "bpm" ;
         lv2:name "BPM" ;
         lv2:default 120.0 ;
-        lv2:minimum 20.0 ;
-        lv2:maximum 300.0 ;
-        lv2:designation <http://lv2plug.in/ns/ext/time#beatsPerMinute> ; # Mixxx envía el BPM aquí
+        lv2:minimum 40.0 ;
+        lv2:maximum 250.0 ;
+        lv2:designation <http://lv2plug.in/ns/ext/time#beatsPerMinute> ;
     ] , [
         # --- AUDIO PORTS ---
         a lv2:AudioPort ,

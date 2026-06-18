@@ -44,9 +44,11 @@ typedef struct {
     float        hpf_y1_l;
     float        hpf_x1_r;
     float        hpf_y1_r;
+
+    // Metrónomo de prueba
+    uint32_t     beat_sample_counter;
 } HybridLooper;
 
-// Array para convertir los pasos calculados internamente (0 a 8) a valores de golpe reales
 static const float BEAT_VALUES[9] = {
     0.03125f, // 0: 1/32
     0.0625f,  // 1: 1/16
@@ -65,10 +67,12 @@ instantiate(const LV2_Descriptor* descriptor, double rate, const char* bundle_pa
     self->sample_rate = rate;
     self->state = STATE_IDLE;
 
-    // Reservar memoria para 15 segundos máximo para dar soporte a tempos lentos
+    // Reservar memoria para 15 segundos máximo
     self->buffer_capacity = (uint32_t)(rate * 15.0); 
     self->buffer_l = (float*)calloc(self->buffer_capacity, sizeof(float));
     self->buffer_r = (float*)calloc(self->buffer_capacity, sizeof(float));
+
+    self->beat_sample_counter = 0;
 
     return (LV2_Handle)self;
 }
@@ -97,6 +101,7 @@ activate(LV2_Handle instance) {
     self->write_ptr = 0;
     self->read_ptr = 0;
     self->total_recorded = 0;
+    self->beat_sample_counter = 0;
     
     for (uint32_t i = 0; i < self->buffer_capacity; ++i) {
         self->buffer_l[i] = 0.0f;
@@ -116,15 +121,14 @@ run(LV2_Handle instance, uint32_t sample_count) {
     float fb  = *(self->feedback);
     float hpf = *(self->hpf_enable);
     
-    // Obtener BPM del knob de Mixxx
     float bpm = *(self->bpm);
     if (bpm < 40.0f || bpm > 250.0f) {
         bpm = 120.0f; 
     }
 
-    // Dividir el valor del knob (0.0 a 1.0) en 9 pasos indexados (0 a 8) de manera interna
+    // Mapear knob de tiempo (0.0 - 1.0) a los 9 pasos
     float knob_val = *(self->time_step);
-    int step_idx = (int)(knob_val * 8.0f + 0.5f); // Redondeo al entero más cercano
+    int step_idx = (int)(knob_val * 8.0f + 0.5f);
     if (step_idx < 0) step_idx = 0;
     if (step_idx > 8) step_idx = 8;
     float beat_setting = BEAT_VALUES[step_idx];
@@ -145,13 +149,30 @@ run(LV2_Handle instance, uint32_t sample_count) {
         float in_left = self->in_l[i];
         float in_right = self->in_r[i];
 
+        // Transiciones basadas en el Activador
         if (self->state == STATE_IDLE && act >= 0.5f) {
             self->state = STATE_RECORDING;
             self->write_ptr = 0;
             self->read_ptr = 0;
             self->total_recorded = 0;
+            self->beat_sample_counter = 0; // Sincronizar metrónomo al trigger
         } else if (act < 0.5f) {
             self->state = STATE_IDLE;
+        }
+
+        // Sintetizador del Metrónomo (Sonará solo cuando el plugin esté Activo)
+        float beep = 0.0f;
+        if (self->state != STATE_IDLE) {
+            uint32_t beep_duration_samples = (uint32_t)(self->sample_rate * 0.05); // 50ms de duración
+            if (self->beat_sample_counter < beep_duration_samples) {
+                // Generar onda senoidal pura a 1000Hz para el "click"
+                beep = sinf(2.0f * 3.14159265f * 1000.0f * (float)self->beat_sample_counter / (float)self->sample_rate) * 0.15f;
+            }
+
+            self->beat_sample_counter++;
+            if (self->beat_sample_counter >= (uint32_t)samples_per_beat) {
+                self->beat_sample_counter = 0; // Reiniciar contador exactamente en cada beat
+            }
         }
 
         if (self->state == STATE_IDLE) {
@@ -164,8 +185,9 @@ run(LV2_Handle instance, uint32_t sample_count) {
             self->write_ptr++;
             self->total_recorded++;
 
-            self->out_l[i] = in_left;
-            self->out_r[i] = in_right;
+            // Mezclamos el pitido del metrónomo sobre la salida
+            self->out_l[i] = in_left + beep;
+            self->out_r[i] = in_right + beep;
 
             if (self->total_recorded >= self->target_samples) {
                 self->state = STATE_LOOPING;
@@ -214,8 +236,9 @@ run(LV2_Handle instance, uint32_t sample_count) {
                 dry_gain = (1.0f - mix) * 2.0f;
             }
 
-            self->out_l[i] = (in_left * dry_gain) + (loop_l * wet_gain);
-            self->out_r[i] = (in_right * dry_gain) + (loop_r * wet_gain);
+            // Mezclar salida e incluir el metrónomo de diagnóstico
+            self->out_l[i] = (in_left * dry_gain) + (loop_l * wet_gain) + beep;
+            self->out_r[i] = (in_right * dry_gain) + (loop_r * wet_gain) + beep;
         }
     }
 }

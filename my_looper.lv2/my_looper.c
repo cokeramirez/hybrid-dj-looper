@@ -70,7 +70,7 @@ connect_port(LV2_Handle instance, uint32_t port, void* data) {
         case 0: self->time_step = (const float*)data; break;
         case 1: self->feedback = (const float*)data; break;
         case 2: self->activator = (const float*)data; break;
-        case 3: self->mix = (const float*)data; break;
+        case 3: self->wet_dry = (const float*)data; break;
         case 4: self->hpf_enable = (const float*)data; break;
         case 5: self->bpm = (const float*)data; break;
         case 6: self->in_l = (const float*)data; break;

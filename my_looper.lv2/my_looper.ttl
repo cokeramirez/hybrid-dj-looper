@@ -9,15 +9,16 @@
     doap:name "Hybrid DJ Looper" ;
     doap:license <http://opensource.org/licenses/isc> ;
     lv2:port [
-        # --- KNOB 1: TIME (BEATS) ---
+        # --- KNOB 1: TIME (9 Pasos fijos) ---
         a lv2:InputPort ,
             lv2:ControlPort ;
         lv2:index 0 ;
-        lv2:symbol "time" ;
+        lv2:symbol "time_step" ;
         lv2:name "Time" ;
-        lv2:default 2.0 ;
-        lv2:minimum 0.125 ; # 1/8 beat
-        lv2:maximum 8.0 ;   # 8 beats
+        lv2:default 6.0 ; # Corresponde a 4 beats por defecto
+        lv2:minimum 0.0 ;
+        lv2:maximum 8.0 ;
+        lv2:portProperty lv2:integer ; # Fuerza a Mixxx a usar pasos enteros
     ] , [
         # --- KNOB 2: FEEDBACK ---
         a lv2:InputPort ,
@@ -45,32 +46,54 @@
         lv2:index 3 ;
         lv2:symbol "mix" ;
         lv2:name "Wet Dry" ;
-        lv2:default 1.0 ;
+        lv2:default 0.5 ;
         lv2:minimum 0.0 ;
         lv2:maximum 1.0 ;
+    ] , [
+        # --- BOTON 5: HPF Filter ---
+        a lv2:InputPort ,
+            lv2:ControlPort ;
+        lv2:index 4 ;
+        lv2:symbol "hpf_enable" ;
+        lv2:name "Filter HPF" ;
+        lv2:default 0.0 ;
+        lv2:minimum 0.0 ;
+        lv2:maximum 1.0 ;
+        lv2:portProperty lv2:toggled ; # Mixxx lo dibujará como un botón
+    ] , [
+        # --- PUERTO INVISIBLE DE BPM (Sincronización automática con Mixxx) ---
+        a lv2:InputPort ,
+            lv2:ControlPort ;
+        lv2:index 5 ;
+        lv2:symbol "bpm" ;
+        lv2:name "BPM" ;
+        lv2:default 120.0 ;
+        lv2:minimum 20.0 ;
+        lv2:maximum 300.0 ;
+        lv2:designation <http://lv2plug.in/ns/ext/time#beatsPerMinute> ; # Mixxx envía el BPM aquí
     ] , [
         # --- AUDIO PORTS ---
         a lv2:AudioPort ,
             lv2:InputPort ;
-        lv2:index 4 ;
+        lv2:index 6 ;
         lv2:symbol "in_left" ;
         lv2:name "In Left"
     ] , [
         a lv2:AudioPort ,
             lv2:InputPort ;
-        lv2:index 5 ;
+        lv2:index 7 ;
         lv2:symbol "in_right" ;
         lv2:name "In Right"
     ] , [
         a lv2:AudioPort ,
             lv2:OutputPort ;
-        lv2:index 6 ;
+        lv2:index 8 ;
         lv2:symbol "out_left" ;
         lv2:name "Out Left"
     ] , [
         a lv2:AudioPort ,
             lv2:OutputPort ;
-        lv2:index 7 ;
+        lv2:index 9 ;
         lv2:symbol "out_right" ;
         lv2:name "Out Right"
     ] .

@@ -1,0 +1,63 @@
+name: Build Hybrid Looper Plugin
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build Plugin
+      run: cmake --build build --config Release
+
+    - name: Package Windows Bundle
+      shell: bash
+      run: |
+        mkdir -p dist/my_looper.lv2
+        cp build/Release/my_looper.dll dist/my_looper.lv2/
+        cp my_looper.lv2/manifest.ttl dist/my_looper.lv2/
+        cp my_looper.lv2/my_looper.ttl dist/my_looper.lv2/
+
+    - name: Upload Windows Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: looper-windows
+        path: dist/my_looper.lv2/
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
+
+    - name: Configure CMake
+      run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build Plugin
+      run: cmake --build build --config Release
+
+    - name: Package Linux Bundle
+      run: |
+        mkdir -p dist/my_looper.lv2
+        cp build/my_looper.so dist/my_looper.lv2/
+        cp my_looper.lv2/manifest.ttl dist/my_looper.lv2/
+        cp my_looper.lv2/my_looper.ttl dist/my_looper.lv2/
+
+    - name: Upload Linux Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: looper-linux
+        path: dist/my_looper.lv2/
